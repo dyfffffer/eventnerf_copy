@@ -1,0 +1,17 @@
+[project]
+name = "eventnerf"
+description = "my version of cvpr2023 eventnerf"
+version = "0.1.0"
+
+dependencies = ["nerfstudio>=0.3.3"] 
+
+
+[tool.setuptools.packages.find]
+include = ["event*"]
+
+[project.entry-points.'nerfstudio.method_configs']
+eventnerf = 'eventnerf.event_config:EventConfig'
+eventnerf2 = 'eventnerf.event_config:EventConfig2'
+eventnerf3 = 'eventnerf.event_config:EventConfig3'
+eventnerf4 = 'eventnerf.event_config:EventConfig4'
+#event-dataparser = 'eventnerf.event_config:EventDataparser'
