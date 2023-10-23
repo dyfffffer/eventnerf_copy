@@ -86,7 +86,7 @@ class EventField2(Field):
             num_layers=num_layers,
             layer_width=hidden_dim,
             out_dim=1 + self.geo_feat_dim,
-            activation=nn.Tanh(),
+            activation=nn.ReLU(), #nn.Tanh(),
             out_activation=None,
             implementation=implementation,
         )

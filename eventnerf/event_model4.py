@@ -55,13 +55,14 @@ class EventModel4Config(ModelConfig):
     """ref: instantNGP"""
 
     _target: Type = field(default_factory=lambda: EventModel4)
+    event_threshold: float = 0.5
     # MLP
     num_layers: int = 2
     hidden_dim: int = 64
     num_layers_color: int = 3
     hidden_dim_color: int = 64
     # hashmap
-    num_levels:int = 64 #32 #16
+    num_levels:int = 16 
     max_res: int = 2048
     log2_hashmap_size: int = 19
     # sampler
@@ -70,14 +71,14 @@ class EventModel4Config(ModelConfig):
     proposal_update_every: int = 5
     proposal_warmup: int = 5000
     num_proposal_iterations: int = 2
-    use_same_proposal_network: bool = True
+    use_same_proposal_network: bool = False
     proposal_net_args_list: List[Dict] = field(
         default_factory=lambda: [
             {"hidden_dim": 16, "log2_hashmap_size": 17, "num_levels": 5, "max_res": 128, "use_linear": False},
-            #{"hidden_dim": 16, "log2_hashmap_size": 17, "num_levels": 5, "max_res": 256, "use_linear": False},
+            {"hidden_dim": 16, "log2_hashmap_size": 17, "num_levels": 5, "max_res": 256, "use_linear": False},
         ]
     )
-    proposal_initial_sampler: Literal["piecewise", "uniform"] = "piecewise"
+    proposal_initial_sampler: Literal["piecewise", "uniform"] = "piecewise"#"uniform" #
     interlevel_loss_mult: float = 1.0
     distortion_loss_mult: float = 0.002
     orientation_loss_mult: float = 0.0001
@@ -87,6 +88,7 @@ class EventModel4Config(ModelConfig):
     use_single_jitter: bool = True
     #other
     near_plane: float = 0.05
+    #far_plane: float = 2
     far_plane: float = 1e3
     enable_collider: bool = False
     collider_params: Optional[Dict[str, float]] = None
@@ -273,8 +275,8 @@ class EventModel4(Model):  # based vanilla NeRF model
     
     def get_loss_dict(self, outputs, batch, metrics_dict=None):
         loss_dict = {}
-        event_frame_selected = batch["event_frame_selected"].to(self.device)
-        pred_rgb = torch.log(outputs["rgb"]**2.2 + 1e-8)
+        event_frame_selected = batch["event_frame_selected"].to(self.device) * self.config.event_threshold
+        pred_rgb = torch.log(outputs["rgb"]**2.2)
         pred_rgb = pred_rgb.reshape(2, len(pred_rgb) // 2, 3)
         diff = (pred_rgb[1] - pred_rgb[0]) * (event_frame_selected != 0)
         loss_dict["event_loss"] = self.event_loss(event_frame_selected, diff)

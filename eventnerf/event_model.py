@@ -58,7 +58,7 @@ class EventModel(NerfactoModel):
 
     def get_loss_dict(self, outputs, batch, metric_dict=None):
         loss_dict = {}
-        acc_map_selected = batch["acc_map_selected"].to(self.device)
+        acc_map_selected = batch["event_frame_selected"].to(self.device) * 0.5
         if True:
             pred_rgb = torch.log(outputs["rgb"]**2.2 + 1e-8)
             pred_rgb = pred_rgb.reshape(2, len(pred_rgb) // 2, 3)

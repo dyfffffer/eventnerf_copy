@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Dict, List, Literal, Optional, Tuple, Type, Union, Any
+from jaxtyping import Float
 
 import nerfacc
 import torch
@@ -45,14 +46,16 @@ class EventModel2Config(ModelConfig):
     _target: Type = field(default_factory=lambda: EventModel2)
     num_coarse_samples: int = 64
     num_importance_samples: int = 128
+    background_color: Union[Literal["random", "last_sample", "black", "white"], Float[Tensor, "3"], Float[Tensor, "*bs 3"]] = Tensor([0.6, 0.6, 0.6])
     loss_coefficients: Dict[str, float] = to_immutable_dict({"event_loss_coarse": 1.0, "event_loss_fine": 1.0})
 
 class EventModel2(Model):  # based vanilla NeRF model
 
-    config: EventModel2Config()
+    config: EventModel2Config
 
     def __init__(self, config: EventModel2Config, **kwargs) -> None:
-        #CONSOLE.print("model init")
+        self.field_coarse = None
+        self.field_fine = None
         super().__init__(config=config, **kwargs)
 
     def populate_modules(self):
@@ -82,7 +85,7 @@ class EventModel2(Model):  # based vanilla NeRF model
         self.sampler_pdf = PDFSampler(num_samples=self.config.num_importance_samples)
 
         # renderers
-        self.renderer_rgb = RGBRenderer(background_color=colors.WHITE)
+        self.renderer_rgb = RGBRenderer(background_color=self.config.background_color)
         self.renderer_accmulation = AccumulationRenderer()
         self.renderer_depth = DepthRenderer()
 
@@ -142,17 +145,20 @@ class EventModel2(Model):  # based vanilla NeRF model
         return outputs
     
     def get_loss_dict(self, outputs, batch, metrics_dict=None) -> Dict[str, torch.Tensor]:
-        acc_map_selected = batch["acc_map_selected"].to(self.device)# * 0.25
+        event_frame_selected = batch["event_frame_selected"].to(self.device)
         pred_rgb_coarse = torch.log(outputs["rgb_coarse"]**2.2 + 1e-8)
         pred_rgb_coarse = pred_rgb_coarse.reshape(2, len(pred_rgb_coarse) // 2, 3)
-        diff_coarse = (pred_rgb_coarse[1] - pred_rgb_coarse[0])
+        diff_coarse = (pred_rgb_coarse[1] - pred_rgb_coarse[0]) * (event_frame_selected != 0)
         pred_rgb_fine = torch.log(outputs["rgb_fine"]**2.2 + 1e-8)
         pred_rgb_fine = pred_rgb_fine.reshape(2, len(pred_rgb_fine) // 2, 3)
-        diff_fine= (pred_rgb_fine[1] - pred_rgb_fine[0])
+        diff_fine= (pred_rgb_fine[1] - pred_rgb_fine[0]) * (event_frame_selected != 0)
 
-        event_loss_coarse = self.event_loss(acc_map_selected, diff_coarse)
-        event_loss_fine = self.event_loss(acc_map_selected, diff_fine)
+        event_loss_coarse = self.event_loss(event_frame_selected, diff_coarse)
+        event_loss_fine = self.event_loss(event_frame_selected, diff_fine)
 
         loss_dict = {"event_loss_coarse": event_loss_coarse, "event_loss_fine": event_loss_fine}
         loss_dict = misc.scale_dict(loss_dict, self.config.loss_coefficients)
         return loss_dict
+    
+    def get_image_metrics_and_images(self, outputs: Dict[str, Tensor], batch: Dict[str, Tensor]) -> Tuple[Dict[str, float], Dict[str, Tensor]]:
+        return {}

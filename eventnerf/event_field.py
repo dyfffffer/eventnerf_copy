@@ -62,15 +62,16 @@ class EventField(Field):
             skip_connections=skip_connections,
             out_activation=nn.Tanh(),
         )
-
-        self.mlp_head = MLP(
-            in_dim=self.mlp_base.get_out_dim() + self.direction_encoding.get_out_dim(),
-            num_layers=head_mlp_num_layers,
-            layer_width=head_mlp_layer_width,
-            out_activation=nn.Tanh(),
-        )
-
         self.field_output_density = DensityFieldHead(in_dim=self.mlp_base.get_out_dim())
+
+        if field_heads:
+            self.mlp_head = MLP(
+                in_dim=self.mlp_base.get_out_dim() + self.direction_encoding.get_out_dim(),
+                num_layers=head_mlp_num_layers,
+                layer_width=head_mlp_layer_width,
+                out_activation=nn.Tanh(),
+            )
+
         self.field_heads = nn.ModuleList([field_head() for field_head in field_heads] if field_heads else [])
         for field_head in self.field_heads:
             field_head.set_in_dim(self.mlp_head.get_out_dim())

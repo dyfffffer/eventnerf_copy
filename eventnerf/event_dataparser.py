@@ -36,7 +36,7 @@ class EventDataParserConfig(DataParserConfig):
     data: Path = Path("/DATA/wyj/EventNeRF/data/lego1/test1")
     scale_factor: float = 1.0
     #scene_scale: float = 1.0
-    scene_scale: float = 0.4
+    scene_scale: float = 0.35
     orientation_menthod: Literal["pca", "up", "vertical", "none"] = "up"
     center_method: Literal["poses", "focus", "none"] = "poses"
     auto_scale_poses: bool = True
@@ -144,15 +144,15 @@ class EventDataParser(DataParser):
 
         # intrinsic files
         intrinsic_files = self.__find_files(dir_path/"intrinsics", ["*.txt"])
-        intrinsic = self.__parse_txt(intrinsic_files[0], (-1, 4))
-        fx = torch.tensor(intrinsic[0][0])
-        fy = torch.tensor(intrinsic[1][1])
-        cx = torch.tensor(intrinsic[0][2])
-        cy = torch.tensor(intrinsic[1][2])
+        intrinsic = Tensor(self.__parse_txt(intrinsic_files[0], (-1, 4)))
+        fx = intrinsic[0][0].clone()
+        fy = intrinsic[1][1].clone()
+        cx = intrinsic[0][2].clone()
+        cy = intrinsic[1][2].clone()
         distortion_params = torch.zeros(6)
         if intrinsic.shape[0] == 5:
-            distortion_params[0] = intrinsic[4][0]
-            distortion_params[1] = intrinsic[4][1]
+            distortion_params[0] = intrinsic[4][0].clone()
+            distortion_params[1] = intrinsic[4][1].clone()
 
         cameras = Cameras(
             camera_to_worlds=poses[:, :3, :4], 

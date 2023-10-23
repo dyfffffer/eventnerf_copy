@@ -3,7 +3,7 @@ name = "eventnerf"
 description = "my version of cvpr2023 eventnerf"
 version = "0.1.0"
 
-dependencies = ["nerfstudio>=0.3.3"] 
+dependencies = ["nerfstudio>=0.3.3", "numba", "torchtyping"] 
 
 
 [tool.setuptools.packages.find]
