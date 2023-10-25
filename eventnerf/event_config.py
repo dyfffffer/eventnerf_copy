@@ -63,7 +63,7 @@ EventConfig2 = MethodSpecification(
         method_name="eventnerf2",  # TODO: rename to your own model
         steps_per_eval_batch=500,
         steps_per_save=2000,
-        max_num_iterations=30000,
+        max_num_iterations=500000,
         mixed_precision=True,
         pipeline=EventPipelineConfig(
             datamanager=EventDataManagerConfig(
@@ -85,8 +85,8 @@ EventConfig2 = MethodSpecification(
             # TODO: consider changing the optimizers depending on your custom Model
             "fields": {
                 #"optimizer": AdamOptimizerConfig(lr=5e-3, eps=1e-15),
-                "optimizer": AdamOptimizerConfig(lr=5e-3, eps=1e-15),
-                #"optimizer": AdamOptimizerConfig(lr=1e-2, eps=1e-15),
+                #"optimizer": AdamOptimizerConfig(lr=5e-3, eps=1e-15),
+                "optimizer": AdamOptimizerConfig(lr=1e-2, eps=1e-15),
                 "scheduler": ExponentialDecaySchedulerConfig(lr_final=0.0001, max_steps=200000),
             },
         },
@@ -106,16 +106,16 @@ EventConfig3 = MethodSpecification(
         pipeline=EventPipelineConfig(
             datamanager=EventDataManagerConfig(
                 dataparser=EventDataParserConfig(),
-                #train_num_rays_per_batch=2048,
-                train_num_rays_per_batch=4096,
+                train_num_rays_per_batch=2048,
+                #train_num_rays_per_batch=4096,
                 eval_num_rays_per_batch=2048,
-                #camera_optimizer=CameraOptimizerConfig(
-                #    mode="SO3xR3",
-                #    #optimizer=RAdamOptimizerConfig(lr=6e-3, eps=1e-8, weight_decay=1e-3),
-                #    optimizer=RAdamOptimizerConfig(lr=6e-3, eps=1e-8, weight_decay=1e-5),
-                #    #1optimizer=AdamOptimizerConfig(lr=1e-2, eps=1e-8, weight_decay=1e-5),
-                #    scheduler=ExponentialDecaySchedulerConfig(lr_final=6e-6, max_steps=200000),
-                #),
+                camera_optimizer=CameraOptimizerConfig(
+                    mode="SO3xR3",
+                    #optimizer=RAdamOptimizerConfig(lr=6e-3, eps=1e-8, weight_decay=1e-3),
+                    optimizer=RAdamOptimizerConfig(lr=6e-3, eps=1e-8, weight_decay=1e-5),
+                    #1optimizer=AdamOptimizerConfig(lr=1e-2, eps=1e-8, weight_decay=1e-5),
+                    scheduler=ExponentialDecaySchedulerConfig(lr_final=6e-6, max_steps=200000),
+                ),
             ),
             model=EventModel3Config(eval_num_rays_per_chunk=8192),
         ),
@@ -126,6 +126,14 @@ EventConfig3 = MethodSpecification(
                 "optimizer": AdamOptimizerConfig(lr=3e-3, eps=1e-15),
                 #"optimizer": AdamOptimizerConfig(lr=1e-3, eps=1e-15),
                 #"optimizer": AdamOptimizerConfig(lr=1e-2, eps=1e-15),
+                "scheduler": ExponentialDecaySchedulerConfig(lr_final=1e-5, max_steps=200000),
+            },
+            "pos_thre": {
+                "optimizer": AdamOptimizerConfig(lr=3e-3, eps=1e-15),
+                "scheduler": ExponentialDecaySchedulerConfig(lr_final=1e-5, max_steps=200000),
+            },
+            "neg_thre": {
+                "optimizer": AdamOptimizerConfig(lr=3e-3, eps=1e-15),
                 "scheduler": ExponentialDecaySchedulerConfig(lr_final=1e-5, max_steps=200000),
             },
         },

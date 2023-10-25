@@ -40,6 +40,7 @@ from eventnerf.event_stream2 import EventStream2
 from eventnerf.event_dataparser import (
     EventDataParserConfig,
 )
+from eventnerf.event_sampler import EventSampler
 
 
 @dataclass
@@ -73,34 +74,61 @@ class EventDataManager(VanillaDataManager):
     def setup_train(self):
         assert self.train_dataset is not None
         CONSOLE.print("Setting up training dataset...")
-        self.event_stream = EventStream2(self.train_dataparser_outputs.metadata["event_files"][0], 
-                                         downscale_factor=self.config.downscale_factor, max_winsize=self.config.max_winsize)
-        self.train_iter = iter(self.event_stream)
-        self.train_pixel_sampler = self._get_pixel_sampler(self.train_dataset, self.config.train_num_rays_per_batch)
+        print("todo this")
+        #self.train_image_dataloader = CacheDataloader(
+        #    self.train_dataset,
+        #    num_images_to_sample_from=self.config.train_num_images_to_sample_from,
+        #    num_times_to_repeat_images=self.config.train_num_times_to_repeat_images,
+        #    device=self.device,
+        #    num_workers=self.world_size * 4,
+        #    pin_memory=True,
+        #    collate_fn=self.config.collate_fn,
+        #    exclude_batch_keys_from_device=self.exclude_batch_keys_from_device,
+        #)
+        #self.iter_train_image_dataloader = iter(self.train_image_dataloader)
+        #image_batch = next(self.iter_train_image_dataloader)
+        #CONSOLE.print("hello", image_batch)
+        self.pos_thre = torch.ones((1000, 260, 346), device=self.device)
+        self.neg_thre = torch.ones((1000, 260, 346), device=self.device)
+        self.event_sampler = EventSampler(self.train_dataparser_outputs.metadata["event_files"][0], pos_thre=self.pos_thre, neg_thre=self.neg_thre, device=self.device)
+        self.event_iter = iter(self.event_sampler)
+        #self.event_stream = EventStream2(self.train_dataparser_outputs.metadata["event_files"][0], 
+        #                                 downscale_factor=self.config.downscale_factor, max_winsize=self.config.max_winsize)
+        #self.train_iter = iter(self.event_stream)
+        #self.train_pixel_sampler = self._get_pixel_sampler(self.train_dataset, self.config.train_num_rays_per_batch)
         self.train_camera_optimizer = self.config.camera_optimizer.setup(
             num_cameras=self.train_dataset.cameras.size, device=self.device
         )
-        CONSOLE.print("cameras.size", self.train_dataset.cameras.size)
+        #CONSOLE.print("cameras.size", self.train_dataset.cameras.size)
         self.train_ray_generator = RayGenerator(
             self.train_dataset.cameras.to(self.device),
             self.train_camera_optimizer,
         )
 
+    def get_param_groups(self) -> Dict[str, List[Parameter]]:
+        param = super().get_param_groups()
+        param["pos_thre"] = list(self.pos_thre)
+        param["neg_thre"] = list(self.neg_thre)
+        return param
+
     def next_train(self, step: int) -> Tuple[RayBundle, Dict]:
         """Returns the next batch of data from the train dataloader."""
         #CONSOLE.print("next_train")
         self.train_count += 1
-        batch = next(self.train_iter)
+        ray_indices, batch = next(self.event_iter)
+        #batch["image"] = self.train_dataset.get_image()
+        ray_bundle = self.train_ray_generator(ray_indices)
+        #batch = next(self.train_iter)
 
-        #if self.train_count % 2 == 0:
-        #if self.train_count > 1000 and self.train_count % 2 == 0:
-        #    self.config.neg_ratio = 1-self.config.neg_ratio
+        ##if self.train_count % 2 == 0:
+        ##if self.train_count > 1000 and self.train_count % 2 == 0:
+        ##    self.config.neg_ratio = 1-self.config.neg_ratio
 
-        #if self.train_count % 2 == 1:
-        if False:
-            ray_bundle, batch = self.sample1(batch)
-        else:
-            ray_bundle, batch = self.sample0(batch)
+        ##if self.train_count % 2 == 1:
+        #if False:
+        #    ray_bundle, batch = self.sample1(batch)
+        #else:
+        #    ray_bundle, batch = self.sample0(batch)
 
         return ray_bundle, batch
 

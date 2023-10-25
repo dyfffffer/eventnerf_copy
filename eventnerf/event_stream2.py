@@ -99,7 +99,7 @@ class EventStream2:
             start = np.searchsorted(ts, start_time*ts.max())
             end = np.searchsorted(ts, end_time*ts.max())
         
-            print ([i-winsize, i], ts[start:end][:2], ts[start:end][-2:])
+            #print ([i-winsize, i], ts[start:end][:2], ts[start:end][-2:])
             if start <= end:
                 xs, ys, ts, ps = xs[start:end], ys[start:end], ts[start:end], ps[start:end]
             else:

@@ -112,11 +112,11 @@ class EventDataParser(DataParser):
             indices = i_eval
 
         transform_matrix = torch.eye(4)
-        #poses, transform_matrix = camera_utils.auto_orient_and_center_poses(
-        #    poses, 
-        #    method=self.config.orientation_menthod, 
-        #    center_method=self.config.center_method,
-        #)
+        poses, transform_matrix = camera_utils.auto_orient_and_center_poses(
+            poses, 
+            method=self.config.orientation_menthod, 
+            center_method=self.config.center_method,
+        )
 
         # Scale poses
         scale_factor = 1.0

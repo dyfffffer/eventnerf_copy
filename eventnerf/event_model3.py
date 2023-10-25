@@ -46,7 +46,7 @@ class EventModel3Config(ModelConfig):
     """ref: instantNGP"""
 
     _target: Type = field(default_factory=lambda: EventModel3)
-    event_threshold = 0.25
+    event_threshold = 0.1
 
     num_layers: int = 2
     hidden_dim: int = 64
@@ -177,9 +177,6 @@ class EventModel3(Model):  # based vanilla NeRF model
             packed_info=packed_info,
         )[0]
         weights = weights[..., None]
-        dists = ray_samples.frustums.ends[..., 0] - ray_samples.frustums.starts[..., 0]
-        ldist2 = torch.sum(1/3*(weights.reshape(-1)**2)*dists.reshape(-1), -1)
-        self.ldist = ldist2
 
         rgb = self.renderer_rgb(
             rgb=field_outputs[FieldHeadNames.RGB],
@@ -212,11 +209,11 @@ class EventModel3(Model):  # based vanilla NeRF model
     def get_loss_dict(self, outputs, batch, metrics_dict=None):
         loss_dict = {}
         event_frame_selected = batch["event_frame_selected"].to(self.device) * self.config.event_threshold
-        pred_rgb = torch.log(outputs["rgb"]**2.2 + 1e-8)
+        pred_rgb = torch.log((outputs["rgb"] + 1e-8) * 1e-5)
         pred_rgb = pred_rgb.reshape(2, len(pred_rgb) // 2, 3)
         diff = (pred_rgb[1] - pred_rgb[0]) * (event_frame_selected != 0)  # mask color
-        #print(diff[:5], event_frame_selected[:5])
-        loss_dict["event_loss"] = self.event_loss(event_frame_selected, diff)# + 1e-4*self.ldist
+        #print(diff.mean(), event_frame_selected.mean())
+        loss_dict["event_loss"] = self.event_loss(event_frame_selected, diff)
 
         #linlog_thres = 20 / 255
         #lin_slope = np.log(linlog_thres) / linlog_thres

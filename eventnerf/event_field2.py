@@ -71,6 +71,9 @@ class EventField2(Field):
             levels=4,
             implementation=implementation,
         )
+        #self.direction_encoding = NeRFEncoding(
+        #    in_dim=3, num_frequencies=4, min_freq_exp=0.0, max_freq_exp=4.0, include_input=True
+        #)
 
         self.mlp_base_grid = HashEncoding(
             num_levels=num_levels,
@@ -86,7 +89,7 @@ class EventField2(Field):
             num_layers=num_layers,
             layer_width=hidden_dim,
             out_dim=1 + self.geo_feat_dim,
-            activation=nn.ReLU(), #nn.Tanh(),
+            activation=nn.ReLU(),
             out_activation=None,
             implementation=implementation,
         )

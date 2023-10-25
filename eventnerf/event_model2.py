@@ -26,6 +26,7 @@ from nerfstudio.field_components.spatial_distortions import SceneContraction
 from nerfstudio.field_components.temporal_distortions import TemporalDistortionKind
 from nerfstudio.field_components.encodings import NeRFEncoding
 from nerfstudio.fields.nerfacto_field import NerfactoField
+from nerfstudio.fields.vanilla_nerf_field import NeRFField
 from nerfstudio.model_components.losses import MSELoss
 from nerfstudio.model_components.ray_samplers import VolumetricSampler, UniformSampler, PDFSampler
 from nerfstudio.model_components.renderers import (
@@ -48,6 +49,7 @@ class EventModel2Config(ModelConfig):
     num_importance_samples: int = 128
     background_color: Union[Literal["random", "last_sample", "black", "white"], Float[Tensor, "3"], Float[Tensor, "*bs 3"]] = Tensor([0.6, 0.6, 0.6])
     loss_coefficients: Dict[str, float] = to_immutable_dict({"event_loss_coarse": 1.0, "event_loss_fine": 1.0})
+    event_threshold: float = 0.25
 
 class EventModel2(Model):  # based vanilla NeRF model
 
@@ -70,12 +72,11 @@ class EventModel2(Model):  # based vanilla NeRF model
             in_dim=3, num_frequencies=4, min_freq_exp=0.0, max_freq_exp=4.0, include_input=True
         )
 
-
-        self.field_coarse = EventField(
+        self.field_coarse = NeRFField(
             position_encoding=position_encoding,
             direction_encoding=direction_encoding,
         )
-        self.field_fine = EventField(
+        self.field_fine = NeRFField(
             position_encoding=position_encoding,
             direction_encoding=direction_encoding,
         )
@@ -145,13 +146,14 @@ class EventModel2(Model):  # based vanilla NeRF model
         return outputs
     
     def get_loss_dict(self, outputs, batch, metrics_dict=None) -> Dict[str, torch.Tensor]:
-        event_frame_selected = batch["event_frame_selected"].to(self.device)
-        pred_rgb_coarse = torch.log(outputs["rgb_coarse"]**2.2 + 1e-8)
+        event_frame_selected = batch["event_frame_selected"].to(self.device) * self.config.event_threshold
+        pred_rgb_coarse = torch.log((outputs["rgb_coarse"] + 1e-8) * 1e-5)
         pred_rgb_coarse = pred_rgb_coarse.reshape(2, len(pred_rgb_coarse) // 2, 3)
         diff_coarse = (pred_rgb_coarse[1] - pred_rgb_coarse[0]) * (event_frame_selected != 0)
-        pred_rgb_fine = torch.log(outputs["rgb_fine"]**2.2 + 1e-8)
+        pred_rgb_fine = torch.log((outputs["rgb_fine"] + 1e-8) * 1e-5)
         pred_rgb_fine = pred_rgb_fine.reshape(2, len(pred_rgb_fine) // 2, 3)
         diff_fine= (pred_rgb_fine[1] - pred_rgb_fine[0]) * (event_frame_selected != 0)
+        #print(diff_fine.mean(), event_frame_selected.mean())
 
         event_loss_coarse = self.event_loss(event_frame_selected, diff_coarse)
         event_loss_fine = self.event_loss(event_frame_selected, diff_fine)
