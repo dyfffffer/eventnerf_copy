@@ -33,10 +33,10 @@ from nerfstudio.utils.io import load_from_json
 class EventDataParserConfig(DataParserConfig):
 
     _target: Type = field(default_factory=lambda: EventDataParser)
-    data: Path = Path("/DATA/wyj/EventNeRF/data/lego1/test1")
+    data: Path = Path("/data/wyj/eventnerf/data/lego1/test1")
     scale_factor: float = 1.0
     #scene_scale: float = 1.0
-    scene_scale: float = 0.35
+    scene_scale: float = 0.28
     orientation_menthod: Literal["pca", "up", "vertical", "none"] = "up"
     center_method: Literal["poses", "focus", "none"] = "poses"
     auto_scale_poses: bool = True
@@ -112,11 +112,11 @@ class EventDataParser(DataParser):
             indices = i_eval
 
         transform_matrix = torch.eye(4)
-        poses, transform_matrix = camera_utils.auto_orient_and_center_poses(
-            poses, 
-            method=self.config.orientation_menthod, 
-            center_method=self.config.center_method,
-        )
+        #poses, transform_matrix = camera_utils.auto_orient_and_center_poses(
+        #    poses, 
+        #    method=self.config.orientation_menthod, 
+        #    center_method=self.config.center_method,
+        #)
 
         # Scale poses
         scale_factor = 1.0

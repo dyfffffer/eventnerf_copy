@@ -46,18 +46,18 @@ class EventModel3Config(ModelConfig):
     """ref: instantNGP"""
 
     _target: Type = field(default_factory=lambda: EventModel3)
-    event_threshold = 0.1
+    event_threshold = 0.25 #0.1
 
     num_layers: int = 2
     hidden_dim: int = 64
     num_layers_color: int = 3
     hidden_dim_color: int = 64
 
-    num_levels:int = 64 #32 #16
+    num_levels:int = 16 # 64 #32 #16
     features_per_level: int = 2
-    grid_resolution: int = 128# * 2
+    grid_resolution: int = 128
     grid_levels: int = 1
-    max_res: int = 2048
+    max_res: int = 1024
     log2_hashmap_size: int = 19
     alpha_thre: float = 1e-5
     cone_angle: float = 0 #0.004
@@ -125,6 +125,7 @@ class EventModel3(Model):  # based vanilla NeRF model
 
         # losses
         self.event_loss = MSELoss()
+        self.rgb_loss = MSELoss()
 
         # metrics
         self.psnr = PeakSignalNoiseRatio(data_range=1.0)
@@ -198,16 +199,21 @@ class EventModel3(Model):  # based vanilla NeRF model
         return outputs
     
     def get_metrics_dict(self, outputs, batch):
-        return {}
-        image = batch["image"].to(self.deivce)
+        #return {}
+        image = batch["image"]#.to(self.deivce)
         image = self.renderer_rgb.blend_background(image)
         metrics_dict = {}
         metrics_dict["psnr"] = self.psnr(outputs["rgb"], image)
-        metrics_dict["num_samples_per_batch"] = outputs["num_samples_per_ray"].sum()
+        #metrics_dict["num_samples_per_batch"] = outputs["num_samples_per_ray"].sum()
         return metrics_dict
     
     def get_loss_dict(self, outputs, batch, metrics_dict=None):
         loss_dict = {}
+
+        # rgb loss
+        #loss_dict["rgb_loss"] = self.rgb_loss(outputs["rgb"], batch["image"])
+
+        # event loss
         event_frame_selected = batch["event_frame_selected"].to(self.device) * self.config.event_threshold
         pred_rgb = torch.log((outputs["rgb"] + 1e-8) * 1e-5)
         pred_rgb = pred_rgb.reshape(2, len(pred_rgb) // 2, 3)

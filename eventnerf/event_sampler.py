@@ -44,11 +44,12 @@ def event_fusion(pos_frames: Tensor, neg_frames, pos_thre, neg_thre, max_winsize
     fusion_frames = pos_frames * pos_thre + neg_frames * neg_thre
     event_frames = torch.Tensor().to(device)
     splits = torch.Tensor()
-    for i in range(max_winsize, len(fusion_frames) + 1): 
-        winsize = np.random.randint(1, max_winsize + 1)
-        event_frame = torch.sum(fusion_frames[i - winsize : i], 0)
+    for i in range(2, len(fusion_frames) + 1): 
+        cur_max_winsize = min(i, max_winsize)
+        winsize = np.random.randint(1, cur_max_winsize)
+        event_frame = torch.sum(fusion_frames[i - winsize : i], dim=0, keepdim=True)
         #print(event_frame)
-        event_frames = torch.concat((event_frames, event_frame[None, ...]), dim=0)
+        event_frames = torch.concat((event_frames, event_frame), dim=0)
         splits = torch.concat((splits, Tensor([[i-winsize, i]])), dim=0)
     return event_frames, splits
 
@@ -63,12 +64,14 @@ def shuffle_array(arr):
 class EventSampler:
     """Event sampler from accumulation frames"""
 
-    def __init__(self, file_path: Path, pos_thre: Tensor, neg_thre: Tensor, max_winsize=50, cam_cnt=1001, h=260, w=346, batch_size=1024, device="cuda:0"):
+    def __init__(self, file_path: Path, pos_thre: Tensor, neg_thre: Tensor, cam_cnt=1001, h=260, w=346, 
+                 neg_ratio=0.1, max_winsize=150, batch_size=1024, device="cuda:0"):
         if file_path == "":  # only test
             self.pos_frames, self.neg_frames = 2 * torch.ones((cam_cnt-1, h, w)), -1 * torch.ones((cam_cnt-1, h, w))
         else:
             self.pos_frames, self.neg_frames = event_split(file_path=file_path, cam_cnt=cam_cnt, h=h, w=w)
         #print(self.pos_frames.shape, self.neg_frames.shape)
+        self.neg_ratio = neg_ratio
         self.pos_thre = pos_thre
         self.neg_thre = neg_thre
         self.max_winsize = max_winsize
@@ -79,7 +82,7 @@ class EventSampler:
         self.device = device
         self.pos_frames = self.pos_frames.to(device)
         self.neg_frames = self.neg_frames.to(device)
-        self.color_mask = torch.zeros((self.h, self.w, 3))
+        self.color_mask = torch.zeros((self.h, self.w, 3), device=device)
         if True:
             self.color_mask[0::2, 0::2, 0] = 1 # R
             self.color_mask[0::2, 1::2, 1] = 1 # G
@@ -92,10 +95,19 @@ class EventSampler:
     def __iter__(self):
         self.event_frames, self.splits = event_fusion(self.pos_frames, self.neg_frames, self.pos_thre, self.neg_thre, self.max_winsize)
         self.nonzero_indices_3d = torch.nonzero(self.event_frames)
+        self.nonzero_indices_3d = self.nonzero_indices_3d[
+            np.random.choice(self.nonzero_indices_3d.shape[0], size=(self.nonzero_indices_3d.shape[0],))
+        ]
+        self.zero_indices_3d = torch.nonzero(self.event_frames == 0)
+        self.zero_indices_3d = self.zero_indices_3d[
+            np.random.choice(self.zero_indices_3d.shape[0], size=(self.zero_indices_3d.shape[0],))
+        ]
         self.count = 0
+        self.zero_count = 0
         self.frames_order = shuffle_array(list(range(len(self.event_frames))))
         self.frames_order_idx = 0
-        self.nonzero_indices_2d = torch.nonzero(self.event_frames[self.frames_order[self.frames_order_idx]])
+        #self.nonzero_indices_2d = torch.nonzero(self.event_frames[self.frames_order[self.frames_order_idx]])
+        #self.zero_indices_2d = torch.nonzero(self.event_frames[self.frames_order[self.frames_order_idx]] == 0)
         #print(self.frame_nonzero_indices.shape)
         #print(self.frames_order)
         #print(self.event_frames)
@@ -128,9 +140,20 @@ class EventSampler:
         if self.frames_order_idx >= len(self.frames_order):
             self.__iter__()
         frame_idx = self.frames_order[self.frames_order_idx]
+        pos_size = int(batch_size * (1 - self.neg_ratio))
+        neg_size = int(batch_size - pos_size)
         if self.count == 0:
             self.nonzero_indices_2d = torch.nonzero(self.event_frames[frame_idx])
-        coords_2d = self.nonzero_indices_2d[self.count: self.count + batch_size].to("cpu")
+            self.nonzero_indices_2d = self.nonzero_indices_2d[
+                np.random.choice(self.nonzero_indices_2d.shape[0], size=(self.nonzero_indices_2d.shape[0]))
+            ]
+            self.zero_indices_2d = torch.nonzero(self.event_frames[frame_idx] == 0)
+        coords_2d = self.nonzero_indices_2d[self.count: self.count + pos_size].to("cpu")
+        selected_zero_indices = np.random.choice(self.zero_indices_2d.shape[0], size=(neg_size, ))
+        coords_zero_2d = self.zero_indices_2d[selected_zero_indices].to("cpu")
+
+        coords_2d = torch.concat((coords_2d, coords_zero_2d), dim=0)
+
         event_frame_selected = self.event_frames[frame_idx, coords_2d[:, 0], coords_2d[:, 1]]
         splits = self.splits[frame_idx][None, ...].tile(len(coords_2d), 1)
         #print(event_frame_selected.shape)
@@ -140,7 +163,7 @@ class EventSampler:
                                     torch.concat((splits[:, 1][..., None], coords_2d), dim=-1)), dim=0).int()
         #print(ray_indices.shape)
         color_mask = self.color_mask[coords_2d[:, 0], coords_2d[:, 1]]
-        self.count += batch_size
+        self.count += pos_size
         if self.count >= len(self.nonzero_indices_2d):
             self.frames_order_idx += 1
             self.count = 0
@@ -149,9 +172,12 @@ class EventSampler:
     def sample_random_3d(self, batch_size):
         if self.count >= len(self.nonzero_indices_3d):
             self.__iter__()
-        selected_indices = np.random.choice(self.nonzero_indices_3d.shape[0], size=(batch_size, ))
-        coords_3d = self.nonzero_indices_3d[selected_indices].to("cpu")
-        #print(coords_3d.shape)
+        pos_size = int(batch_size * (1 - self.neg_ratio))
+        neg_size = int(batch_size - pos_size)
+        coords_3d = self.nonzero_indices_3d[self.count: self.count + pos_size].to("cpu")
+        coords_zero_3d = self.zero_indices_3d[self.zero_count: self.zero_count + neg_size].to("cpu")
+        #print(coords_3d.shape, coords_zero_3d.shape)
+        coords_3d = torch.concat((coords_3d, coords_zero_3d), dim=0)
         #print(coords_3d)
         event_frame_selected = self.event_frames[coords_3d[:, 0], coords_3d[:, 1], coords_3d[:, 2]]
         splits = self.splits[coords_3d[:, 0]]
@@ -160,13 +186,14 @@ class EventSampler:
         ray_indices = torch.concat((torch.concat((splits[:, 0][..., None], coords_3d[:, 1:]), dim=-1),
                                     torch.concat((splits[:, 1][..., None], coords_3d[:, 1:]), dim=-1)), dim=0).int()
         color_mask = self.color_mask[coords_3d[:, 1], coords_3d[:, 2]]
-        self.count += batch_size
+        self.count += pos_size
+        self.zero_count += neg_size
         return ray_indices, event_frame_selected, color_mask
     
     def __next__(self):
-        ray_indices, event_frame, color_mask = self.sample_ordered(self.batch_size)
+        #ray_indices, event_frame, color_mask = self.sample_ordered(self.batch_size)
         #ray_indices, event_frame, color_mask = self.sample_random_frames(self.batch_size)
-        #ray_indices, event_frame, color_mask = self.sample_random_3d(self.batch_size)
+        ray_indices, event_frame, color_mask = self.sample_random_3d(self.batch_size)
         #print(ray_indices.shape)
         #print(event_frame.shape)
         event_frame = event_frame[..., None].tile(1, 3) * color_mask

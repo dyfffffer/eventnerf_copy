@@ -8,7 +8,7 @@ from torch.utils.data.dataset import Dataset
 from nerfstudio.utils.rich_utils import CONSOLE
 import timeit
 
-class EventStream2:
+class EventStream:
 
     def __init__(self, event_path: Path, cmr_cnt = 1001, h=260, w=346, is_color=True, downscale_factor=1):
         self.event_path = Path(event_path)
@@ -116,7 +116,7 @@ class EventStream2:
         return Tensor(splits).reshape(-1, 2)
 
 if __name__ == "__main__":
-    es = EventStream2("/DATA/wyj/EventNeRF/data/lego1/test1/train/events/test_lego1_color.npz")
+    es = EventStream("/DATA/wyj/EventNeRF/data/lego1/test1/train/events/test_lego1_color.npz")
     #print(es.acc_maps[0, 0, 0])
     #print(es.acc_maps[0, 0, 1])
     #print(es.acc_maps[0, 1, 0])
