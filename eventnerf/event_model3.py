@@ -46,7 +46,8 @@ class EventModel3Config(ModelConfig):
     """ref: instantNGP"""
 
     _target: Type = field(default_factory=lambda: EventModel3)
-    event_threshold = 0.25 #0.1
+
+    loss_coefficients: Dict[str, float] = to_immutable_dict({"rgb_loss": 1.0, "event_loss": 0.0})
 
     num_layers: int = 2
     hidden_dim: int = 64
@@ -56,23 +57,23 @@ class EventModel3Config(ModelConfig):
     num_levels:int = 16 # 64 #32 #16
     features_per_level: int = 2
     grid_resolution: int = 128
-    grid_levels: int = 1
+    grid_levels: int = 4
     max_res: int = 1024
     log2_hashmap_size: int = 19
-    alpha_thre: float = 1e-5
+    alpha_thre: float = 1e-3
     cone_angle: float = 0 #0.004
 
     render_step_size: Optional[float] = None
     near_plane: float = 0.05
-    far_plane: float = 1e3
+    far_plane: float = 2 #1e3
     enable_collider: bool = False
     collider_params: Optional[Dict[str, float]] = None
-    background_color: Union[Literal["random", "last_sample", "black", "white"], Float[Tensor, "3"], Float[Tensor, "*bs 3"]] = Tensor([0.624, 0.624, 0.624])
+    background_color: Union[Literal["random", "last_sample", "black", "white"], Float[Tensor, "3"], Float[Tensor, "*bs 3"]] = Tensor([0.62, 0.62, 0.62])
     #background_color: Union[Literal["random", "last_sample", "black", "white"], Float[Tensor, "3"], Float[Tensor, "*bs 3"]] = "random"
     disable_scene_contraction: bool = True 
 
 
-class EventModel3(Model):  # based vanilla NeRF model
+class EventModel3(Model):
 
     config: EventModel3Config
 
@@ -199,36 +200,13 @@ class EventModel3(Model):  # based vanilla NeRF model
         return outputs
     
     def get_metrics_dict(self, outputs, batch):
-        #return {}
-        image = batch["image"]#.to(self.deivce)
+        return {}
+        image = batch["image"].to(self.deivce)
         image = self.renderer_rgb.blend_background(image)
         metrics_dict = {}
         metrics_dict["psnr"] = self.psnr(outputs["rgb"], image)
         #metrics_dict["num_samples_per_batch"] = outputs["num_samples_per_ray"].sum()
         return metrics_dict
-    
-    def get_loss_dict(self, outputs, batch, metrics_dict=None):
-        loss_dict = {}
-
-        # rgb loss
-        #loss_dict["rgb_loss"] = self.rgb_loss(outputs["rgb"], batch["image"])
-
-        # event loss
-        event_frame_selected = batch["event_frame_selected"].to(self.device) * self.config.event_threshold
-        pred_rgb = torch.log((outputs["rgb"] + 1e-8) * 1e-5)
-        pred_rgb = pred_rgb.reshape(2, len(pred_rgb) // 2, 3)
-        diff = (pred_rgb[1] - pred_rgb[0]) * (event_frame_selected != 0)  # mask color
-        #print(diff.mean(), event_frame_selected.mean())
-        loss_dict["event_loss"] = self.event_loss(event_frame_selected, diff)
-
-        #linlog_thres = 20 / 255
-        #lin_slope = np.log(linlog_thres) / linlog_thres
-        #color = outputs["rgb"]# ** 2.2
-        #color = color.reshape(2, len(color) // 2, 3)
-        #lin_log_rgb = torch.where(color < linlog_thres, lin_slope * color, torch.log(color))
-        #diff = (lin_log_rgb[1] - lin_log_rgb[0]) * (event_frame_selected != 0)  # mask color
-        #loss_dict["event_loss"] = self.event_loss(event_frame_selected, diff)
-        return loss_dict
     
     def get_image_metrics_and_images(
         self, outputs: Dict[str, torch.Tensor], batch: Dict[str, torch.Tensor]
@@ -265,3 +243,27 @@ class EventModel3(Model):  # based vanilla NeRF model
         }
         
         return metrics_dict, image_dict
+    
+    def get_loss_dict(self, outputs, batch, metric_dict=None):
+        image = batch["image"][..., :3].to(self.device)
+        pred_rgb, image = self.renderer_rgb.blend_background_for_loss_computation(
+            pred_image=outputs["rgb"],
+            pred_accumulation=outputs["accumulation"],
+            gt_image=image,
+        )
+        rgb_loss = self.rgb_loss(image, pred_rgb)
+
+        ef = batch["event_frame_selected"].to(self.device)
+
+        log_rgb = torch.log(pred_rgb)
+        log_rgb = log_rgb.reshape(2, len(log_rgb) // 2, 3)
+        diff = (log_rgb[1] - log_rgb[0]) * (ef != 0)
+        #event_loss = self.event_loss(ef / ef.max(), diff / diff.max()) + \
+        #             self.event_loss(ef / ef.min(), diff / diff.min()) + \
+        #             self.event_loss(ef / (ef.max() - ef.min()), diff / (diff.max() - diff.min()))
+        #event_loss = self.event_loss(ef * 0.25, diff * 2.2)
+
+        loss_dict = {"event_loss:": event_loss, "rgb_loss": rgb_loss}
+        loss_dict = misc.scale_dict(loss_dict, self.config.loss_coefficients)
+        return loss_dict
+    

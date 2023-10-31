@@ -36,9 +36,10 @@ class EventDataParserConfig(DataParserConfig):
     data: Path = Path("/data/wyj/eventnerf/data/lego1/test1")
     scale_factor: float = 1.0
     #scene_scale: float = 1.0
-    scene_scale: float = 0.28
+    scene_scale: float = 0.35
     orientation_menthod: Literal["pca", "up", "vertical", "none"] = "up"
     center_method: Literal["poses", "focus", "none"] = "poses"
+    #auto_scale_poses: bool = False #True
     auto_scale_poses: bool = True
     eval_mode: Literal["fraction", "filename", "interval", "all"] = "all"
     train_split_fraction: float = 0.9

@@ -55,7 +55,7 @@ class EventModel4Config(ModelConfig):
     """ref: instantNGP"""
 
     _target: Type = field(default_factory=lambda: EventModel4)
-    event_threshold: float = 0.5
+    event_threshold: float = 0.25
     # MLP
     num_layers: int = 2
     hidden_dim: int = 64
@@ -265,12 +265,10 @@ class EventModel4(Model):  # based vanilla NeRF model
         metrics_dict = {}
         if self.training:
             metrics_dict["distortion"] = distortion_loss(outputs["weights_list"], outputs["ray_samples_list"])
-        return metrics_dict
-        image = batch["image"].to(self.deivce)
+        image = batch["image"]#.to(self.deivce)
         image = self.renderer_rgb.blend_background(image)
-        metrics_dict = {}
         metrics_dict["psnr"] = self.psnr(outputs["rgb"], image)
-        metrics_dict["num_samples_per_batch"] = outputs["num_samples_per_ray"].sum()
+        #metrics_dict["num_samples_per_batch"] = outputs["num_samples_per_ray"].sum()
         return metrics_dict
     
     def get_loss_dict(self, outputs, batch, metrics_dict=None):
